@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>LLM Kontext-Fenster Entwicklung – Bar Chart Race</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #0f1117;
+    color: #e0e0e0;
+    padding: 20px;
+    min-height: 100vh;
+  }
+  h1 {
+    text-align: center;
+    font-size: 1.5rem;
+    margin-bottom: 6px;
+    color: #fff;
+    letter-spacing: 0.5px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 0.85rem;
+    color: #888;
+    margin-bottom: 18px;
+  }
+  #chart-container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  #date-display {
+    text-align: center;
+    font-size: 2.8rem;
+    font-weight: 700;
+    color: #4a9eff;
+    margin-bottom: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .bar-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    height: 42px;
+    transition: all 0.05s ease;
+  }
+  .bar-label {
+    width: 140px;
+    text-align: right;
+    padding-right: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+    color: #ddd;
+  }
+  .bar-wrapper {
+    flex: 1;
+    background: #1a1d27;
+    border-radius: 4px;
+    overflow: hidden;
+    height: 36px;
+    position: relative;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.12s ease-out;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 10px;
+    min-width: 40px;
+  }
+  .bar-value {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  }
+  .controls {
+    max-width: 900px;
+    margin: 20px auto 0;
+    padding: 16px 20px;
+    background: #1a1d27;
+    border-radius: 10px;
+    border: 1px solid #2a2d3a;
+  }
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .slider-row label {
+    font-size: 0.82rem;
+    color: #aaa;
+    white-space: nowrap;
+  }
+  #timeline-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    background: #2a2d3a;
+    outline: none;
+    cursor: pointer;
+  }
+  #timeline-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #4a9eff;
+    cursor: pointer;
+    box-shadow: 0 0 6px rgba(74,158,255,0.6);
+  }
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  button {
+    padding: 8px 18px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: background 0.2s;
+  }
+  #btn-play { background: #4a9eff; color: #fff; }
+  #btn-play:hover { background: #2e86f5; }
+  #btn-reset { background: #333; color: #ccc; }
+  #btn-reset:hover { background: #444; }
+  .speed-label { font-size: 0.82rem; color: #aaa; }
+  #speed-select {
+    background: #2a2d3a;
+    color: #ccc;
+    border: 1px solid #3a3d4a;
+    border-radius: 5px;
+    padding: 5px 8px;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .legend {
+    max-width: 900px;
+    margin: 16px auto 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 0 4px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: #bbb;
+  }
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .source-note {
+    text-align: center;
+    font-size: 0.7rem;
+    color: #555;
+    margin-top: 18px;
+  }
+</style>
+</head>
+<body>
+
+<div id="chart-container">
+  <h1>🧠 Kontext-Fenster-Entwicklung der Top-LLMs</h1>
+  <p class="subtitle">Bar Chart Race · Anfang 2023 – März 2026 · Angabe in Tokens</p>
+  <div id="date-display">Jan 2023</div>
+  <div id="bars"></div>
+</div>
+
+<div class="controls">
+  <div class="slider-row">
+    <label>📅 Zeitraum:</label>
+    <input type="range" id="timeline-slider" min="0" max="0" value="0" step="1">
+    <label id="slider-label" style="min-width:80px;text-align:right;color:#4a9eff;font-weight:700;">Jan 2023</label>
+  </div>
+  <div class="btn-row">
+    <button id="btn-play">▶ Play</button>
+    <button id="btn-reset">↺ Reset</button>
+    <span class="speed-label">Geschwindigkeit:</span>
+    <select id="speed-select">
+      <option value="800">Langsam</option>
+      <option value="400" selected>Normal</option>
+      <option value="150">Schnell</option>
+      <option value="60">Sehr schnell</option>
+    </select>
+  </div>
+</div>
+
+<div class="legend" id="legend"></div>
+<p class="source-note">Datenquellen: Offizielle Modell-Ankündigungen von OpenAI, Anthropic, Google DeepMind, Meta, Mistral AI, xAI, Cohere u.a. · Erstellt mit ByLKI</p>
+
+<script>
+// =============================================
+// DATENBASIS: Kontext-Fenster in Tokens
+// Format: [Datum-Index, Tokens]
+// =============================================
+const models = {
+  "GPT-3.5 Turbo": {
+    color: "#10a37f",
+    data: {
+      0: 4096,    // Jan 2023
+      3: 16385,   // Apr 2023 (16k version)
+      6: 16385,
+      9: 16385,
+      12: 16385,
+      15: 16385,
+      18: 16385,
+      21: 16385,
+      24: 16385,
+      27: 16385,
+      30: 16385,
+      33: 16385,
+      38: 16385,
+    }
+  },
+  "GPT-4": {
+    color: "#1a7f64",
+    data: {
+      2: 8192,    // Mär 2023
+      3: 8192,
+      6: 32768,   // 32k version
+      9: 32768,
+      12: 128000, // GPT-4 Turbo Nov 2023
+      15: 128000,
+      18: 128000,
+      21: 128000,
+      24: 128000,
+      27: 128000,
+      30: 128000,
+      33: 128000,
+      38: 128000,
+    }
+  },
+  "GPT-4o": {
+    color: "#00bfa5",
+    data: {
+      16: 128000, // Mai 2024
+      17: 128000,
+      18: 128000,
+      19: 128000,
+      20: 128000,
+      21: 128000,
+      22: 128000,
+      23: 128000,
+      24: 128000,
+      25: 128000,
+      26: 128000,
+      27: 128000,
+      28: 128000,
+      29: 128000,
+      30: 128000,
+      31: 128000,
+      32: 128000,
+      33: 128000,
+      34: 128000,
+      35: 128000,
+      36: 128000,
+      37: 128000,
+      38: 1000000, // GPT-4.1 mit 1M (Mär 2025 approx)
+    }
+  },
+  "Claude 2": {
+    color: "#c9784a",
+    data: {
+      6: 100000,  // Jul 2023
+      7: 100000,
+      8: 100000,
+      9: 100000,
+      10: 100000,
+      11: 200000, // Claude 2.1 Nov 2023
+      12: 200000,
+    }
+  },
+  "Claude 3": {
+    color: "#e67e4a",
+    data: {
+      14: 200000, // Mär 2024
+      15: 200000,
+      16: 200000,
+      17: 200000,
+      18: 200000,
+      19: 200000,
+      20: 200000,
+      21: 200000,
+      22: 200000,
+      23: 200000,
+      24: 200000,
+    }
+  },
+  "Claude 3.5": {
+    color: "#ff7043",
+    data: {
+      17: 200000, // Jun 2024
+      18: 200000,
+      19: 200000,
+      20: 200000,
+      21: 200000,
+      22: 200000,
+      23: 200000,
+      24: 200000,
+      25: 200000,
+      26: 200000,
+      27: 200000,
+      28: 200000,
+      29: 200000,
+      30: 200000,
+      31: 200000,
+      32: 200000,
+      33: 200000,
+      34: 200000,
+      35: 200000,
+      36: 200000,
+      37: 200000,
+      38: 200000,
+    }
+  },
+  "Gemini 1.0 Pro": {
+    color: "#4285f4",
+    data: {
+      11: 32768,  // Dez 2023
+      12: 32768,
+      13: 32768,
+    }
+  },
+  "Gemini 1.5 Pro": {
+    color: "#1a73e8",
+    data: {
+      14: 1000000, // Mär 2024 (1M public)
+      15: 1000000,
+      16: 1000000,
+      17: 1000000,
+      18: 2000000, // Aug 2024 – 2M
+      19: 2000000,
+      20: 2000000,
+      21: 2000000,
+      22: 2000000,
+      23: 2000000,
+    }
+  },
+  "Gemini 1.5 Flash": {
+    color: "#5c9af5",
+    data: {
+      16: 1000000, // Mai 2024
+      17: 1000000,
+      18: 1000000,
+      19: 1000000,
+      20: 1000000,
+      21: 1000000,
+      22: 1000000,
+      23: 1000000,
+    }
+  },
+  "Gemini 2.0 Flash": {
+    color: "#82b1ff",
+    data: {
+      24: 1000000, // Jan 2025
+      25: 1000000,
+      26: 1000000,
+      27: 1000000,
+      28: 1000000,
+      29: 1000000,
+      30: 1000000,
+      31: 1000000,
+      32: 1000000,
+      33: 1000000,
+      34: 1000000,
+      35: 1000000,
+      36: 1000000,
+      37: 1000000,
+      38: 1000000,
+    }
+  },
+  "Gemini 2.5 Pro": {
+    color: "#448aff",
+    data: {
+      37: 1000000, // Mär 2025
+      38: 1000000,
+    }
+  },
+  "Llama 2": {
+    color: "#7c4dff",
+    data: {
+      6: 4096,   // Jul 2023
+      7: 4096,
+      8: 4096,
+      9: 4096,
+      10: 4096,
+      11: 4096,
+      12: 4096,
+      13: 4096,
+    }
+  },
+  "Llama 3": {
+    color: "#9c6dff",
+    data: {
+      15: 8192,   // Apr 2024
+      16: 8192,
+      17: 8192,
+      18: 128000, // Llama 3.1 128k Jul 2024
+      19: 128000,
+      20: 128000,
+      21: 128000,
+      22: 128000,
+      23: 128000,
+      24: 128000,
+      25: 128000,
+      26: 128000,
+      27: 128000,
+    }
+  },
+  "Mistral": {
+    color: "#ef5350",
+    data: {
+      9: 8192,   // Okt 2023
+      10: 8192,
+      11: 32768, // Mixtral MoE
+      12: 32768,
+      13: 32768,
+      14: 32768,
+      15: 32768,
+      16: 128000, // Mistral Large 2 128k
+      17: 128000,
+      18: 128000,
+      19: 128000,
+      20: 128000,
+      21: 128000,
+      22: 128000,
+      23: 128000,
+      24: 128000,
+      25: 128000,
+      26: 128000,
+      27: 128000,
+      28: 128000,
+      29: 128000,
+      30: 128000,
+      31: 128000,
+      32: 128000,
+      33: 128000,
+      34: 128000,
+      35: 128000,
+      36: 128000,
+      37: 128000,
+      38: 128000,
+    }
+  },
+  "Command R+": {
+    color: "#f06292",
+    data: {
+      15: 128000, // Apr 2024 (Cohere)
+      16: 128000,
+      17: 128000,
+      18: 128000,
+      19: 128000,
+      20: 128000,
+      21: 128000,
+      22: 128000,
+      23: 128000,
+      24: 128000,
+      25: 128000,
+      26: 128000,
+      27: 128000,
+    }
+  },
+  "Grok 1": {
+    color: "#f9a825",
+    data: {
+      9: 8192,  // Okt 2023
+      10: 8192,
+      11: 8192,
+      12: 8192,
+      13: 8192,
+    }
+  },
+  "Grok 1.5": {
+    color: "#ffca28",
+    data: {
+      14: 128000, // Mär 2024
+      15: 128000,
+      16: 128000,
+      17: 128000,
+      18: 128000,
+      19: 128000,
+    }
+  },
+  "Grok 2": {
+    color: "#ffd740",
+    data: {
+      19: 128000, // Aug 2024
+      20: 128000,
+      21: 128000,
+      22: 128000,
+      23: 128000,
+      24: 128000,
+      25: 128000,
+      26: 128000,
+      27: 131072,
+      28: 131072,
+      29: 131072,
+      30: 131072,
+      31: 131072,
+      32: 131072,
+      33: 131072,
+      34: 131072,
+      35: 131072,
+      36: 131072,
+      37: 131072,
+      38: 131072,
+    }
+  },
+  "DeepSeek-V2": {
+    color: "#26c6da",
+    data: {
+      16: 128000, // Mai 2024
+      17: 128000,
+      18: 128000,
+    }
+  },
+  "DeepSeek-V3": {
+    color: "#00bcd4",
+    data: {
+      24: 128000, // Jan 2025
+      25: 128000,
+      26: 128000,
+      27: 128000,
+      28: 128000,
+      29: 128000,
+      30: 128000,
+      31: 128000,
+      32: 128000,
+      33: 128000,
+      34: 128000,
+      35: 128000,
+      36: 128000,
+      37: 128000,
+      38: 128000,
+    }
+  },
+  "Qwen2.5": {
+    color: "#66bb6a",
+    data: {
+      20: 128000, // Sep 2024
+      21: 128000,
+      22: 128000,
+      23: 128000,
+      24: 128000,
+      25: 128000,
+      26: 128000,
+      27: 128000,
+      28: 128000,
+      29: 128000,
+      30: 128000,
+      31: 128000,
+      32: 128000,
+      33: 128000,
+      34: 128000,
+      35: 128000,
+      36: 128000,
+      37: 128000,
+      38: 128000,
+    }
+  },
+};
+
+// Zeitschritte: Monat 0 = Jan 2023, Monat 38 = Mär 2026
+const TOTAL_MONTHS = 39;
+const START_YEAR = 2023;
+const START_MONTH = 0; // Januar
+
+function monthIndexToLabel(idx) {
+  const months = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+  const totalMonths = idx;
+  const year = START_YEAR + Math.floor((START_MONTH + totalMonths) / 12);
+  const month = (START_MONTH + totalMonths) % 12;
+  return months[month] + " " + year;
+}
+
+// Interpolation: Wert für Modell zum Zeitpunkt idx
+function getValueAt(modelKey, idx) {
+  const d = models[modelKey].data;
+  const keys = Object.keys(d).map(Number).sort((a,b)=>a-b);
+  if (!keys.length) return 0;
+  if (idx < keys[0]) return 0;
+  let lastVal = 0;
+  for (let k of keys) {
+    if (k <= idx) lastVal = d[k];
+    else break;
+  }
+  return lastVal;
+}
+
+function formatTokens(n) {
+  if (n >= 1000000) return (n/1000000).toFixed(1).replace('.0','') + "M";
+  if (n >= 1000) return (n/1000).toFixed(0) + "K";
+  return n.toString();
+}
+
+// Top-N-Modelle für einen Zeitpunkt (nur Modelle mit Wert > 0)
+const TOP_N = 10;
+
+function getTopModels(idx) {
+  const entries = Object.keys(models).map(k => ({
+    key: k,
+    value: getValueAt(k, idx),
+    color: models[k].color
+  })).filter(e => e.value > 0);
+  entries.sort((a,b) => b.value - a.value);
+  return entries.slice(0, TOP_N);
+}
+
+// DOM aufbauen
+const barsDiv = document.getElementById('bars');
+const slider = document.getElementById('timeline-slider');
+const dateDisplay = document.getElementById('date-display');
+const sliderLabel = document.getElementById('slider-label');
+
+slider.max = TOTAL_MONTHS - 1;
+slider.value = 0;
+
+let currentIdx = 0;
+let playing = false;
+let intervalId = null;
+
+function render(idx) {
+  currentIdx = idx;
+  slider.value = idx;
+  const label = monthIndexToLabel(idx);
+  dateDisplay.textContent = label;
+  sliderLabel.textContent = label;
+
+  const top = getTopModels(idx);
+  const maxVal = top.length > 0 ? top[0].value : 1;
+
+  barsDiv.innerHTML = '';
+  top.forEach((entry, rank) => {
+    const pct = Math.max(3, (entry.value / maxVal) * 100);
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    row.innerHTML = `
+      <div class="bar-label">${entry.key}</div>
+      <div class="bar-wrapper">
+        <div class="bar-fill" style="width:${pct}%;background:${entry.color}">
+          <span class="bar-value">${formatTokens(entry.value)}</span>
+        </div>
+      </div>
+    `;
+    barsDiv.appendChild(row);
+  });
+}
+
+function getSpeed() {
+  return parseInt(document.getElementById('speed-select').value);
+}
+
+function startPlay() {
+  if (currentIdx >= TOTAL_MONTHS - 1) currentIdx = 0;
+  playing = true;
+  document.getElementById('btn-play').textContent = '⏸ Pause';
+  intervalId = setInterval(() => {
+    if (currentIdx >= TOTAL_MONTHS - 1) {
+      stopPlay();
+      return;
+    }
+    currentIdx++;
+    render(currentIdx);
+  }, getSpeed());
+}
+
+function stopPlay() {
+  playing = false;
+  clearInterval(intervalId);
+  document.getElementById('btn-play').textContent = '▶ Play';
+}
+
+document.getElementById('btn-play').addEventListener('click', () => {
+  if (playing) stopPlay();
+  else startPlay();
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  stopPlay();
+  render(0);
+});
+
+slider.addEventListener('input', () => {
+  stopPlay();
+  render(parseInt(slider.value));
+});
+
+document.getElementById('speed-select').addEventListener('change', () => {
+  if (playing) {
+    stopPlay();
+    startPlay();
+  }
+});
+
+// Legende
+const legendDiv = document.getElementById('legend');
+Object.entries(models).forEach(([key, m]) => {
+  const item = document.createElement('div');
+  item.className = 'legend-item';
+  item.innerHTML = `<div class="legend-dot" style="background:${m.color}"></div><span>${key}</span>`;
+  legendDiv.appendChild(item);
+});
+
+render(0);
+</script>
+</body>
+</html>
